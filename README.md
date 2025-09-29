@@ -1,6 +1,7 @@
 CMP425 / CMP501 
 Lab 3 Application-Layer Protocol Example - by Andrei Boiko
 Built using SFML Sockets
+Name : Kananake Yimsirivattana 2502432
 
 ### The "Game"
 This is a very simple prototype for a tank game. At the moment it draws a single tank consisting
