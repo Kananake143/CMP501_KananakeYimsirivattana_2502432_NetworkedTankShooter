@@ -1,8 +1,16 @@
 #pragma once
+#include <SFML/Network.hpp>
 
-// A simple tank update message
-// FIXME: Consider what else we need to send and include it here.
 struct TankMessage {
-	// The coordinates of the tank within the game world.
-	float x, y;
+    int id = 0;
+    float x = 0.f;
+    float y = 0.f;
+    float bodyRotation = 0.f;    
+    float barrelRotation = 0.f;
+    bool isFiring = false;
+    int sequence_number = 0;
+    float timestamp = 0.f;
 };
+
+sf::Packet& operator <<(sf::Packet& packet, const TankMessage& m);
+sf::Packet& operator >>(sf::Packet& packet, TankMessage& m);

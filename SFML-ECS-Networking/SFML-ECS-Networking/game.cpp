@@ -1,80 +1,116 @@
 #include "game.h"
+#include "utils.h"
 
-Game::Game()
-{
-	// Initialise the background texture and sprite.
-	// FIXME: loadFromFile returns a bool if texture was loaded successfully. We should use it to check for errors.
-	backgroundTexture.loadFromFile("Assets/tileSand1.png");
-	backgroundTexture.setRepeated(true);
-
-	// Replace placeholder texture with a proper background texture, now that we have it.
-	background.setTexture(backgroundTexture);
-	background.setTextureRect(sf::IntRect({ 0, 0 }, { 640, 480 }));
-
-	// Set default tank position to be the centre of the window.
-	tank.position = { 320, 240 };
+Game::Game() {
+    backgroundTexture = std::make_unique<sf::Texture>();
+    if (backgroundTexture->loadFromFile("Assets/tileSand1.png")) {
+        backgroundTexture->setRepeated(true);
+        background = std::make_unique<sf::Sprite>(*backgroundTexture);
+        background->setTextureRect(sf::IntRect({ 0, 0 }, { 800, 600 }));
+    }
+    tank = std::make_unique<Tank>("red", 1);
 }
 
-void Game::HandleEvents(const std::optional<sf::Event> event)
-{
-	// Handle key press events passed from window.
-	if (const auto* keyPressed = event->getIf<sf::Event::KeyPressed>()) {
-		if (keyPressed->scancode == sf::Keyboard::Scancode::W) {
-			tank.isMoving.forward = true;
-			tank.isMoving.backward = false;
-		}
-		else if (keyPressed->scancode == sf::Keyboard::Scancode::S) {
-			tank.isMoving.forward = false;
-			tank.isMoving.backward = true;
-		}
-		if (keyPressed->scancode == sf::Keyboard::Scancode::A) {
-			tank.isMoving.left = true;
-			tank.isMoving.right = false;
-		}
-		else if (keyPressed->scancode == sf::Keyboard::Scancode::D) {
-			tank.isMoving.left = false;
-			tank.isMoving.right = true;
-		}
-		if (keyPressed->scancode == sf::Keyboard::Scancode::D) {
-
-		}
-	}
-
-	// Handle key release events passed from window.
-	else if (const auto* keyReleased = event->getIf<sf::Event::KeyReleased>()) {
-		if (keyReleased->scancode == sf::Keyboard::Scancode::W)
-			tank.isMoving.forward = false;
-		if (keyReleased->scancode == sf::Keyboard::Scancode::S)
-			tank.isMoving.backward = false;
-		if (keyReleased->scancode == sf::Keyboard::Scancode::A)
-			tank.isMoving.left = false;
-		if (keyReleased->scancode == sf::Keyboard::Scancode::D)
-			tank.isMoving.right = false;
-	}
+void Game::InitLocalTank(int role) {
+    this->role = role;
+    if (role == 1) {
+        tank = std::make_unique<Tank>("red", 1);
+        tank->position = { 400.f, 500.f };
+        tank->barrelRotation = 270.f; 
+    }
+    else if (role == 2) {
+        tank = std::make_unique<Tank>("green", 2);
+        tank->position = { 400.f, 100.f };
+        tank->barrelRotation = 90.f;  
+    }
 }
 
-void Game::Update(float dt)
-{
-	tank.Update(dt);
+void Game::HandleEvents(const std::optional<sf::Event>& event) {
+    if (!event || !tank) return;
+
+    if (const auto* keyPressed = event->getIf<sf::Event::KeyPressed>()) {
+        if (role == 1) {
+            if (keyPressed->scancode == sf::Keyboard::Scancode::W) tank->input.up = true;
+            if (keyPressed->scancode == sf::Keyboard::Scancode::S) tank->input.down = true;
+            if (keyPressed->scancode == sf::Keyboard::Scancode::A) tank->input.left = true;
+            if (keyPressed->scancode == sf::Keyboard::Scancode::D) tank->input.right = true;
+        }
+        else if (role == 2) {
+            if (keyPressed->scancode == sf::Keyboard::Scancode::Up) tank->input.up = true;
+            if (keyPressed->scancode == sf::Keyboard::Scancode::Down) tank->input.down = true;
+            if (keyPressed->scancode == sf::Keyboard::Scancode::Left) tank->input.left = true;
+            if (keyPressed->scancode == sf::Keyboard::Scancode::Right) tank->input.right = true;
+        }
+    }
+
+    if (const auto* keyReleased = event->getIf<sf::Event::KeyReleased>()) {
+        if (role == 1) {
+            if (keyReleased->scancode == sf::Keyboard::Scancode::W) tank->input.up = false;
+            if (keyReleased->scancode == sf::Keyboard::Scancode::S) tank->input.down = false;
+            if (keyReleased->scancode == sf::Keyboard::Scancode::A) tank->input.left = false;
+            if (keyReleased->scancode == sf::Keyboard::Scancode::D) tank->input.right = false;
+        }
+        else if (role == 2) {
+            if (keyReleased->scancode == sf::Keyboard::Scancode::Up) tank->input.up = false;
+            if (keyReleased->scancode == sf::Keyboard::Scancode::Down) tank->input.down = false;
+            if (keyReleased->scancode == sf::Keyboard::Scancode::Left) tank->input.left = false;
+            if (keyReleased->scancode == sf::Keyboard::Scancode::Right) tank->input.right = false;
+        }
+    }
 }
 
-void Game::NetworkUpdate(float dt, TankMessage data) {
-	// Force position update from network data.
-	tank.position = { data.x, data.y };
-	// Update tank with new position.
-	// NOTE: This assumets no inputs were detected and so the tank will only move according to 
-	// network updates. This is not ideal and prone to unexpected behaviour if game is extended
-	// to be fully multiplayer. 
-	tank.Update(dt);
+void Game::UpdateRemoteTank(TankMessage data) {
+    if (remoteTanks.find(data.id) == remoteTanks.end()) {
+        std::string color = (data.id == 1) ? "red" : "green";
+        remoteTanks[data.id] = std::make_unique<Tank>(color, data.id);
+        Utils::printMsg("Added remote tank ID " + std::to_string(data.id), MessageType::success);
+    }
+
+    auto& rTank = remoteTanks[data.id];
+
+    rTank->positionBuffer.push_back({ {data.x, data.y}, data.bodyRotation, data.barrelRotation, data.timestamp });
+
+    if (data.isFiring) {
+        rTank->position = { data.x, data.y }; 
+        rTank->barrelRotation = data.barrelRotation; 
+        rTank->Fire();
+    }
 }
 
-void Game::Render(sf::RenderWindow& window)
-{
-	window.draw(background);
-	tank.Render(window);
+void Game::Update(float dt) {
+    if (role != 3 && tank) tank->Update(dt);
+    for (auto& [id, rTank] : remoteTanks) {
+        if (rTank) rTank->Update(dt);
+    }
 }
 
-TankMessage Game::GetNetworkUpdate()
-{
-	return { tank.position.x, tank.position.y };
+void Game::Render(sf::RenderWindow& window, float currentNetTime) {
+    float renderTime = currentNetTime - interpolationDelay; 
+
+    if (background) window.draw(*background);
+
+    if (role != 3 && tank) {
+        tank->Render(window);
+    }
+
+    for (auto& [id, rTank] : remoteTanks) {
+        if (rTank) {
+            rTank->ApplyInterpolation(renderTime);
+            rTank->Render(window);
+        }
+    }
+}
+TankMessage Game::GetNetworkUpdate() {
+    TankMessage m;
+    if (tank) { 
+        m.id = this->role;
+        m.x = tank->position.x;      
+        m.y = tank->position.y;     
+        m.bodyRotation = tank->bodyRotation;
+        m.barrelRotation = tank->barrelRotation;
+    }
+    else {
+        Utils::printMsg("Local tank is NULL in GetNetworkUpdate", MessageType::error);
+    }
+    return m;
 }

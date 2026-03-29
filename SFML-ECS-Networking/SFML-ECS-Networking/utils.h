@@ -1,30 +1,20 @@
 #pragma once
 #include <string>
 #include <iostream>
-#include <chrono>
-#include <iomanip>
-#include <ctime>
 
-enum MessageType { info, debug, warning, error, success };
-enum ConnType { Undefined, TCP, UDP };
+enum class MessageType { info, debug, warning, error, success };
 
 class Utils
 {
 public:
-	static void printMsg(std::string msg, MessageType type = info) {
-		const auto now = std::chrono::system_clock::now();
-		const std::time_t currentTime = std::chrono::system_clock::to_time_t(now);
-		std::tm localTime = {};
-		localtime_s(&localTime, &currentTime);
-		const auto timestamp = std::put_time(&localTime, "%Y-%m-%d %H:%M:%S");
-
-		switch (type)
-		{
-		case debug: std::cout << "\033[36m" << timestamp << "   " << msg << "\033[0m" << std::endl; break;
-		case warning: std::cout << "\033[33m" << timestamp << "   " << msg << "\033[0m" << std::endl; break;
-		case error: std::cout << "\033[1;31m" << timestamp << "   " << msg << "\033[0m" << std::endl; break;
-		case success: std::cout << "\033[1;32m" << timestamp << "   " << msg << "\033[0m" << std::endl; break;
-		default: std::cout << timestamp << "   " << msg << std::endl; break;
-		}
-	}
+    static void printMsg(std::string msg, MessageType type = MessageType::info) {
+        switch (type)
+        {
+        case MessageType::debug:   std::cout << "[DEBUG] " << msg << std::endl; break;
+        case MessageType::error:   std::cout << "[ERROR] " << msg << std::endl; break;
+        case MessageType::success: std::cout << "[SUCCESS] " << msg << std::endl; break;
+        case MessageType::warning: std::cout << "[WARNING] " << msg << std::endl; break;
+        default:                   std::cout << "[INFO] " << msg << std::endl; break;
+        }
+    }
 };

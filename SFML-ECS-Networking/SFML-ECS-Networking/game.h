@@ -1,26 +1,33 @@
 #pragma once
-#include "tank.h"
+#include <SFML/Graphics.hpp>
+#include <map>
+#include <optional>
+#include <memory>
+#include "Tank.h"
+#include "tank_message.h"
 
-class Game
-{
+class Game {
 public:
-	Game();
+    Game();
 
-	void HandleEvents(const std::optional<sf::Event> event);
-	void Update(float dt);
-	void NetworkUpdate(float dt, TankMessage data);
-	void Render(sf::RenderWindow &window);
-	TankMessage GetNetworkUpdate();
+    void InitLocalTank(int role);
+    void HandleEvents(const std::optional<sf::Event>& event);
+    void Update(float dt);
+    void UpdateRemoteTank(TankMessage data);
+    void Render(sf::RenderWindow& window, float currentNetTime);
+
+    TankMessage GetNetworkUpdate();
+
+    Tank& GetLocalTank() { return *tank; }
 
 private:
-	Tank tank = Tank("green"); // player object
+    std::unique_ptr<Tank> tank; 
+    int role = 0;
 
-	// Temporary placeholder texture, make sue to replace before rendering the sprite.
-	sf::Texture placeholder = sf::Texture(sf::Vector2u(1, 1));
-	sf::Texture backgroundTexture;
+    std::unique_ptr<sf::Texture> backgroundTexture;
+    std::unique_ptr<sf::Sprite> background;
 
-	// This can (and probably should) be replaced with std::optional or a unique pointer, 
-	// to remove the need to use placeholder textures for sprite initialisation.
-	sf::Sprite background = sf::Sprite(placeholder);
+    std::map<int, std::unique_ptr<Tank>> remoteTanks;
+
+    const float interpolationDelay = 0.1f;
 };
-

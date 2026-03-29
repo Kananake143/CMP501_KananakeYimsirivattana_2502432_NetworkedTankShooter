@@ -272,6 +272,7 @@
     <ClCompile Include="game.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="tank.cpp" />
+    <ClCompile Include="tank_message.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="game.h" />

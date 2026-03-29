@@ -1,143 +1,123 @@
-#include <SFML\Graphics.hpp>
-#include <SFML\Network.hpp>
-#include <sstream>
-#include <iomanip>
+#include <SFML/Graphics.hpp>
+#include <SFML/Network.hpp>
+#include <iostream>
+#include <map>
+#include <optional> 
+#include "tank_message.h"
 #include "game.h"
 #include "utils.h"
 
+struct ClientAddr {
+    sf::IpAddress ip;
+    unsigned short port;
+
+    ClientAddr(sf::IpAddress _ip, unsigned short _port) : ip(_ip), port(_port) {}
+};
+
 int main() {
-	bool is_observer = false;
-	unsigned short observer_port = 53000;
-	unsigned short playerPort = sf::Socket::AnyPort;
+    std::cout << "Select Role: 1.P1 (Red), 2.P2 (Green), 3.Server: ";
+    int role;
+    if (!(std::cin >> role)) return -1;
 
-	Utils::printMsg("Game startup...");
+    sf::RenderWindow window(sf::VideoMode({ 800, 600 }), "CMP501 Tank - Role: " + std::to_string(role));
 
-	std::string title_type = "";
+    Game game;
+    game.InitLocalTank(role); 
 
-	bool ready = false;
+    sf::Clock clock;
 
-	while (!ready) {
-		Utils::printMsg("Are we playing or observing? Enter 1 for Player, enter 2 for Observer:");
-		std::string input_line;
-		std::getline(std::cin, input_line);
+    sf::UdpSocket socket;
+    unsigned short localPort = (role == 3) ? 5000 : (5000 + role);
 
-		if (!input_line.empty() && input_line.at(0) == '1') {
-			Utils::printMsg("Player chosen, preparing window...");
-			title_type = "Player";
-			is_observer = false;
-			ready = true;
-		}
-		else if (!input_line.empty() && input_line.at(0) == '2') {
-			Utils::printMsg("Observer chosen, preparing window...");
-			title_type = "Observer";
-			is_observer = true;
-			ready = true;
-		}
-		else {
-			Utils::printMsg("Incorrect input, please try again!", warning);
-		}
-	}
+    if (socket.bind(localPort) != sf::Socket::Status::Done) {
+        Utils::printMsg("Failed to bind port " + std::to_string(localPort), MessageType::error);
+        return -1;
+    }
+    socket.setBlocking(false);
 
-	// Prepare window.
-	sf::RenderWindow window(sf::VideoMode({ 640, 480 }), "CMP425/CMP501 - Lab 3: Packets (" + title_type + ")");
-	window.setFramerateLimit(60);	//Request 60 frames per second
-	Utils::printMsg("Window ready, configuring networking...");
+    auto resolvedIp = sf::IpAddress::resolve("127.0.0.1");
+    if (!resolvedIp) {
+        Utils::printMsg("Could not resolve server IP", MessageType::error);
+        return -1;
+    }
+    sf::IpAddress serverIp = resolvedIp.value();
+    unsigned short serverPort = 5000;
 
-	// Prepare networking.
-	sf::UdpSocket socket;
-	auto port = is_observer ? observer_port : playerPort;
+    std::map<int, ClientAddr> clients;
+    sf::Clock netClock;
 
-	Utils::printMsg("Binding UDP socket...");
-	if (socket.bind(port) != sf::Socket::Status::Done)
-	{
-		Utils::printMsg("Error binding socket!", error);
-	}
-	else {
-		Utils::printMsg("Socket bound to port: " + std::to_string(socket.getLocalPort()));
-	}
+    while (window.isOpen()) {
+        float dt = clock.restart().asSeconds();
+        float currentNetTime = clock.getElapsedTime().asSeconds();
 
-	//Clock for timing the 'dt' value
-	sf::Clock clock;
+        // --- Handle Events ---
+        while (const std::optional event = window.pollEvent()) {
+            if (event->is<sf::Event::Closed>()) window.close();
+            game.HandleEvents(event);
+        }
+       
+        // --- 1. Send Data ---
+        if (role == 1 || role == 2) {
+            TankMessage m = game.GetNetworkUpdate();
+            m.id = role;
+            m.timestamp = currentNetTime;
 
-	// Game object.
-	Game game;
+            if (m.x == 0.0f && m.y == 0.0f) {
+                Utils::printMsg("Warning: Sending Zero Position! Check GetNetworkUpdate", MessageType::warning);
+            }
+            if (sf::Keyboard::isKeyPressed(sf::Keyboard::Scancode::W) || sf::Keyboard::isKeyPressed(sf::Keyboard::Scancode::Up)) {
+                std::string debugStr = "Sending Pos: " + std::to_string(m.x) + ", " + std::to_string(m.y);
+                Utils::printMsg(debugStr, MessageType::debug);
+            }
+            if (role == 1)
+                m.isFiring = sf::Keyboard::isKeyPressed(sf::Keyboard::Scancode::Space);
+            else if (role == 2)
+                m.isFiring = sf::Keyboard::isKeyPressed(sf::Keyboard::Scancode::Enter);
 
-	// Other game parameters.
-	float game_speed = 1.0f;
-	float send_rate = 0.1f;
-	float send_timer = 0;
+            if (m.isFiring) game.GetLocalTank().Fire();
 
-	while (window.isOpen()) {
-		// Calculate dt.
-		float dt = clock.restart().asSeconds() * game_speed;
-		send_timer += dt; // Count how much time has passed.
-		// Handle window events (e.g. key press).
-		while (const std::optional event = window.pollEvent())	{
-			if (event->is<sf::Event::Closed>()) {
-				Utils::printMsg("Window closed, unbinding socket...", MessageType::warning);
-				window.close();
-				socket.unbind();
-			}
-			if (const auto* keyPressed = event->getIf<sf::Event::KeyPressed>()) {
-				if (keyPressed->scancode == sf::Keyboard::Scancode::Escape) {
-					Utils::printMsg("ESC pressed, closing window, unbinding socket...", MessageType::warning);
-					window.close();
-					socket.unbind();
-				}
-			}
-			// We only handle inputs for the player. Observer will do direct updates from network data.
-			if(!is_observer)
-				game.HandleEvents(event);
-		}
-		// Packet to hold our updates.
-		sf::Packet packet;
-		if (is_observer) {
-			std::optional<sf::IpAddress> incoming_ip;
-			unsigned short incoming_port;
+            sf::Packet p;
+            p << m;
+            socket.send(p, serverIp, serverPort);
+        }
 
-			// FIXME: Recieve can fail, check for errors.
-			if (socket.receive(packet, incoming_ip, incoming_port) == sf::Socket::Status::Done) {
-				Utils::printMsg("Recieved message from: " + incoming_ip.value().toString() + ":" + std::to_string(incoming_port));
-				TankMessage message;
+       
 
-				// Read recieved data into TankMessage struct.
-				// FIXME: reading from packet can fail. Refer to documentation on how to
-				// handle errors and add error checking here.
-				packet >> message.x >> message.y;
-				// Use the message data to update the game.
-				game.NetworkUpdate(dt, message);
-			}
-			else {
-				Utils::printMsg("Failed to recieve message from: " + incoming_ip.value().toString() + ":" + std::to_string(incoming_port), error);
-			}
-		}
-		else {
-			game.Update(dt);
-			// Get data structure from game, containing update message.
-			TankMessage message = game.GetNetworkUpdate();
-			// Translate our messgage struct to sf::Packet (very rudimentary conversion)
-			packet << message.x << message.y;
-			sf::IpAddress observerIp(127, 0, 0, 1);
+        // --- 2. Receive Data---
+        sf::Packet rp;
+        std::optional<sf::IpAddress> senderIp;
+        unsigned short senderPort;
 
-			// Send messages only as often as the send rate allows.
-			if (send_timer >= send_rate) {
-				// FIXME: Send can fail, check for errors and adjust logic accordingly.
-				if (socket.send(packet, observerIp, observer_port) == sf::Socket::Status::Done) {
-					Utils::printMsg("Sent message to: " + observerIp.toString() + ":" + std::to_string(observer_port));
-				}
-				else {
-					Utils::printMsg("Failed to send message to: " + observerIp.toString() + ":" + std::to_string(observer_port), error);
-				}
-				// Reset timer after sending the message
-				send_timer = 0;
-			}
-		}
-		// Render
-		window.clear();
-		game.Render(window); // This takes window as a reference.
-		window.display();		
-	}
+        while (socket.receive(rp, senderIp, senderPort) == sf::Socket::Status::Done) {
+            TankMessage d;
 
-	return 0;
+            if (rp >> d && senderIp) {
+                if (role == 3) { // Logic  SERVER
+                    if (clients.find(d.id) == clients.end()) {
+                        clients.emplace(d.id, ClientAddr(senderIp.value(), senderPort));
+                        Utils::printMsg("Client " + std::to_string(d.id) + " connected.", MessageType::success);
+                    }
+
+                    game.UpdateRemoteTank(d);
+
+                    for (auto const& [id, addr] : clients) {
+                        if (id != d.id) {
+                            socket.send(rp, addr.ip, addr.port);
+                        }
+                    }
+                }
+                else if (d.id != role) { 
+                    game.UpdateRemoteTank(d);
+                }
+            }
+        }
+
+        game.Update(dt);
+
+        window.clear(sf::Color(50, 50, 50)); 
+        game.Render(window, currentNetTime);
+        window.display();
+    }
+
+    return 0;
 }
-

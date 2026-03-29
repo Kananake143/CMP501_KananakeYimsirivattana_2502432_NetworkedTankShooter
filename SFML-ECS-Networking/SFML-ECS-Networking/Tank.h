@@ -1,48 +1,47 @@
 #pragma once
-#include <SFML\Graphics.hpp>
+#include <SFML/Graphics.hpp>
 #include <vector>
+#include <string>
+#include <deque>
+#include <memory>
 #include "tank_message.h"
 
-class Tank
-{
+class Tank {
 public:
-	// Colour string will be used in path for image texture loading. 
-	// Will work with "red", "blue", "green" and "black".
-	// 
-	// FIXME: this is not the cleanest solution as you can make a typo which will cause
-	// texture to fail to load. Ideally should use enum/map or similar solution.
-	Tank(std::string colour);
+    Tank(std::string colour = "red", int id = 1); 
 
-	void Update(float dt);
-	const void Render(sf::RenderWindow &window);
+    void Update(float dt);
+    void Render(sf::RenderWindow& window);
+    void Fire();
 
-	sf::Vector2f position = {0.f, 0.f};
-	sf::Angle barrelRotation = sf::degrees(0);
-	sf::Angle bodyRotation = sf::degrees(0);;
+    struct RemoteState {
+        sf::Vector2f position;
+        float bodyRot;
+        float barrelRot;
+        float timestamp;
+    };
 
-	struct {
-		bool forward = false;
-		bool backward = false;
-		bool left = false;
-		bool right = false;
-	} isMoving;
+    std::deque<RemoteState> positionBuffer;
+    void ApplyInterpolation(float renderTime);
+
+    sf::Vector2f position;
+    float bodyRotation = 0.f;
+    float barrelRotation = 0.f;
+
+    struct {
+        bool up = false, down = false, left = false, right = false;
+    } input;
 
 private:
-	// Temporary placeholder texture, make sue to replace before rendering the sprite.
-	sf::Texture placeholder = sf::Texture(sf::Vector2u(1, 1));
+    sf::Texture bodyTexture;
+    sf::Texture barrelTexture;
+    sf::Texture bulletTexture;
 
-	sf::Texture bodyTexture;
-	sf::Texture barrelTexture;
+    std::unique_ptr<sf::Sprite> body;
+    std::unique_ptr<sf::Sprite> barrel;
 
-	// These can (and probably should) be replaced with std::optional or unique pointers, 
-	// to remove the need to use placeholder textures for sprite initialisation.
-	sf::Sprite body = sf::Sprite(placeholder);
-	sf::Sprite barrel = sf::Sprite(placeholder);
-
-	float movementSpeed = 150.f;
-	float rotationSpeed = 200.f;
-
-	// Saving current colour here in case we need to send elsewhere.
-	std::string colorString = "";
+    struct Bullet { sf::Vector2f pos; float angle; };
+    std::vector<Bullet> bullets;
+    float movementSpeed = 200.f;
+    int tankId;
 };
-

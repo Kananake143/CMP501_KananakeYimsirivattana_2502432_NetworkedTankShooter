@@ -1,67 +1,108 @@
-#include "tank.h"
+#include "Tank.h"
+#include <cmath>
+#include "utils.h"
 
-Tank::Tank(std::string colour)
+Tank::Tank(std::string colour, int id) : tankId(id)
 {
-	// Save input colour in case we need it later.
-	colorString = colour;
+    if (!bodyTexture.loadFromFile("Assets/" + colour + "Tank.png")) {
+        Utils::printMsg("Failed to load body", MessageType::error);
+    }
+    if (!barrelTexture.loadFromFile("Assets/" + colour + "Barrel.png")) {
+        Utils::printMsg("Failed to load barrel", MessageType::error);
+    }
+    if (!bulletTexture.loadFromFile("Assets/bullet.png")) {
+        Utils::printMsg("Failed to load bullet", MessageType::error);
+    }
 
-	// Load textures.
-	// FIXME: loadFromFile returns a bool if texture was loaded successfully. We should use it to check for errors.
-	bodyTexture.loadFromFile("Assets/" + colour + "Tank.png");
-	barrelTexture.loadFromFile("Assets/" + colour + "Barrel.png");
+    body = std::make_unique<sf::Sprite>(bodyTexture);
+    barrel = std::make_unique<sf::Sprite>(barrelTexture);
 
-	// Apply tetxures to sprites.
-	body.setTexture(bodyTexture);
-	barrel.setTexture(barrelTexture);
+    sf::Vector2f bodySize = sf::Vector2f(bodyTexture.getSize());
+    body->setOrigin(bodySize / 2.f);
+    barrel->setOrigin({ 6.f, 2.f });
 
-	// Reset texture rectangle. Applying new texture does not automatically apply it's size to sprite.
-	body.setTextureRect(sf::IntRect({ 0, 0 }, (sf::Vector2i)bodyTexture.getSize()));
-	barrel.setTextureRect(sf::IntRect({ 0, 0 }, (sf::Vector2i)barrelTexture.getSize()));
-
-	// Set sprite origins. For bodym use the center of the texture. For barrel, hardcoded value.
-	body.setOrigin((sf::Vector2f)body.getTextureRect().getCenter());
-	barrel.setOrigin({ 6, 2 });
-
-	// With the correct offset on the barrel, we can just set barrel position = body position.
-	body.setPosition(position);
-	barrel.setPosition(body.getPosition());
-
-	// Set default barrel rotation to match body rotation.
-	// FIXME: for actual tank game, we would have barrel rotated independently of the body.
-	body.setRotation(bodyRotation);
-	barrel.setRotation(body.getRotation());
+    if (id == 1) {
+        barrelRotation = 270.f; 
+    }
+    else {
+        barrelRotation = 90.f; 
+    }
 }
 
-void Tank::Update(float dt)
-{
-	// Update rotation angle based on input.
-	if (isMoving.left)
-		bodyRotation -= sf::degrees(rotationSpeed * dt);
-	else if (isMoving.right)
-		bodyRotation += sf::degrees(rotationSpeed * dt);
+void Tank::Update(float dt) {
+    if (input.up)    position.y -= movementSpeed * dt;
+    if (input.down)  position.y += movementSpeed * dt;
+    if (input.left)  position.x -= movementSpeed * dt;
+    if (input.right) position.x += movementSpeed * dt;
 
-	// Calculate direction vector from angle of rotation.
-	sf::Vector2f body_direction = {
-		std::cos((bodyRotation - sf::degrees(90)).asRadians()),
-		std::sin((bodyRotation - sf::degrees(90)).asRadians())
-	};
+    for (auto it = bullets.begin(); it != bullets.end();) {
+        float rad = it->angle * 3.14159f / 180.f;
+        it->pos.x += std::cos(rad) * 400.f * dt;
+        it->pos.y += std::sin(rad) * 400.f * dt;
 
-	// Update position based on input and direction.
-	if (isMoving.forward)
-		position -= body_direction * movementSpeed * dt;
-	else if (isMoving.backward)
-		position += body_direction * movementSpeed * dt;
-
-	// Apply new rotation to tank body and barrel.
-	body.setRotation(bodyRotation);
-	barrel.setRotation(bodyRotation);
-
-	// Apply new position to tank body and barrel.
-	body.setPosition(position);
-	barrel.setPosition(position);
+        if (it->pos.x < 0 || it->pos.x > 800 || it->pos.y < 0 || it->pos.y > 600) {
+            it = bullets.erase(it);
+        }
+        else {
+            ++it;
+        }
+    }
 }
 
-const void Tank::Render(sf::RenderWindow &window) {
-		window.draw(body);
-		window.draw(barrel);
+void Tank::Fire() {
+    bullets.push_back({ position, barrelRotation });
+}
+
+void Tank::Render(sf::RenderWindow& window) {
+    if (!body || !barrel) return;
+
+    if (!positionBuffer.empty()) {
+        sf::Vector2f latestPos = positionBuffer.back().position;
+        float latestBodyRot = positionBuffer.back().bodyRot;
+        float latestBarrelRot = positionBuffer.back().barrelRot;
+
+        body->setPosition(latestPos);
+        body->setRotation(sf::degrees(latestBodyRot));
+        barrel->setPosition(latestPos);
+        barrel->setRotation(sf::degrees(latestBarrelRot));
+    }
+    else {
+        body->setPosition(position);
+        body->setRotation(sf::degrees(bodyRotation));
+        barrel->setPosition(position);
+        barrel->setRotation(sf::degrees(barrelRotation));
+    }
+
+    window.draw(*body);
+    window.draw(*barrel);
+
+    for (auto& b : bullets) {
+        sf::Sprite bSprite(bulletTexture);
+        sf::Vector2f bSize = sf::Vector2f(bulletTexture.getSize());
+        bSprite.setOrigin(bSize / 2.f);
+        bSprite.setPosition(b.pos);
+        bSprite.setRotation(sf::degrees(b.angle));
+        window.draw(bSprite);
+    }
+}
+
+void Tank::ApplyInterpolation(float renderTime) {
+    if (positionBuffer.empty()) return;
+
+    if (positionBuffer.size() > 8) renderTime += 0.05f;
+
+    while (positionBuffer.size() >= 2 && positionBuffer[1].timestamp < renderTime) {
+        positionBuffer.pop_front();
+    }
+
+    if (positionBuffer.size() >= 2) {
+        const auto& p0 = positionBuffer[0];
+        const auto& p1 = positionBuffer[1];
+        float t = (renderTime - p0.timestamp) / (p1.timestamp - p0.timestamp);
+        t = std::max(0.f, std::min(1.f, t));
+
+        position = p0.position + t * (p1.position - p0.position);
+        bodyRotation = p0.bodyRot + t * (p1.bodyRot - p0.bodyRot);
+        barrelRotation = p0.barrelRot + t * (p1.barrelRot - p0.barrelRot);
+    }
 }
