@@ -78,6 +78,7 @@ int main() {
 
             sf::Packet p;
             p << m;
+            // Asynchronous send via UDP - efficiency over reliability
             socket.send(p, serverIp, serverPort);
         }
 
@@ -93,13 +94,14 @@ int main() {
 
             if (rp >> d && senderIp) {
                 if (role == 3) { // Logic  SERVER
+                    // Register new client address upon first packet arrival.
                     if (clients.find(d.id) == clients.end()) {
                         clients.emplace(d.id, ClientAddr(senderIp.value(), senderPort));
                         Utils::printMsg("Client " + std::to_string(d.id) + " connected.", MessageType::success);
                     }
 
                     game.UpdateRemoteTank(d);
-
+                    // Relay the received packet to all clients except the original sender.
                     for (auto const& [id, addr] : clients) {
                         if (id != d.id) {
                             socket.send(rp, addr.ip, addr.port);
@@ -107,6 +109,7 @@ int main() {
                     }
                 }
                 else if (d.id != role) { 
+                    // CLIENT LOGIC: Update the local representation of remote entities.
                     game.UpdateRemoteTank(d);
                 }
             }

@@ -2,6 +2,7 @@
 #include "utils.h"
 
 Game::Game() {
+
     backgroundTexture = std::make_unique<sf::Texture>();
     if (backgroundTexture->loadFromFile("Assets/tileSand1.png")) {
         backgroundTexture->setRepeated(true);
@@ -60,6 +61,7 @@ void Game::HandleEvents(const std::optional<sf::Event>& event) {
 }
 
 void Game::UpdateRemoteTank(TankMessage data) {
+    // If the tank ID doesn't exist in our map, instantiate a new remote tank.
     if (remoteTanks.find(data.id) == remoteTanks.end()) {
         std::string color = (data.id == 1) ? "red" : "green";
         remoteTanks[data.id] = std::make_unique<Tank>(color, data.id);
@@ -67,9 +69,9 @@ void Game::UpdateRemoteTank(TankMessage data) {
     }
 
     auto& rTank = remoteTanks[data.id];
-
+    // Push the latest network state into the buffer for interpolation.
     rTank->positionBuffer.push_back({ {data.x, data.y}, data.bodyRotation, data.barrelRotation, data.timestamp });
-
+    // Handle firing events immediately as they are discrete actions.
     if (data.isFiring) {
         rTank->position = { data.x, data.y }; 
         rTank->barrelRotation = data.barrelRotation; 
@@ -85,14 +87,15 @@ void Game::Update(float dt) {
 }
 
 void Game::Render(sf::RenderWindow& window, float currentNetTime) {
+    // Determine the specific point in the past to render remote entities.
     float renderTime = currentNetTime - interpolationDelay; 
 
     if (background) window.draw(*background);
-
+    // Local tank is rendered using immediate local state (Authoritative).
     if (role != 3 && tank) {
         tank->Render(window);
     }
-
+    // Remote tanks are rendered using interpolated states to mask network jitter.
     for (auto& [id, rTank] : remoteTanks) {
         if (rTank) {
             rTank->ApplyInterpolation(renderTime);

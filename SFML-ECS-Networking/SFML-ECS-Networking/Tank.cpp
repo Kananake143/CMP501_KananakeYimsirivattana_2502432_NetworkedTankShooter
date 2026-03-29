@@ -89,8 +89,12 @@ void Tank::Render(sf::RenderWindow& window) {
 void Tank::ApplyInterpolation(float renderTime) {
     if (positionBuffer.empty()) return;
 
-    if (positionBuffer.size() > 8) renderTime += 0.05f;
+    // Jitter Buffer management: if the buffer grows too large, 
+    // speed up playback slightly to reduce accumulated latency.
 
+    if (positionBuffer.size() > 8) renderTime += 0.05f;
+    
+    // Discard outdated states that are older than the current render time.
     while (positionBuffer.size() >= 2 && positionBuffer[1].timestamp < renderTime) {
         positionBuffer.pop_front();
     }
@@ -98,9 +102,10 @@ void Tank::ApplyInterpolation(float renderTime) {
     if (positionBuffer.size() >= 2) {
         const auto& p0 = positionBuffer[0];
         const auto& p1 = positionBuffer[1];
+        // Calculate the interpolation factor (0.0 to 1.0) between two network states.
         float t = (renderTime - p0.timestamp) / (p1.timestamp - p0.timestamp);
         t = std::max(0.f, std::min(1.f, t));
-
+        // Linear Interpolation (LERP) for smooth movement between known positions.
         position = p0.position + t * (p1.position - p0.position);
         bodyRotation = p0.bodyRot + t * (p1.bodyRot - p0.bodyRot);
         barrelRotation = p0.barrelRot + t * (p1.barrelRot - p0.barrelRot);
