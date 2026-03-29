@@ -1,16 +1,34 @@
-CMP425 / CMP501 
-Lab 3 Application-Layer Protocol Example - by Andrei Boiko
-Built using SFML Sockets
+# CMP501: Networked Tank Shooter (UDP Implementation)
 Name : Kananake Yimsirivattana 2502432
+A real-time multiplayer tank game developed using **C++** and **SFML**. This project focuses on high-performance networking, utilizing **UDP** and **Entity Interpolation** to handle network jitter and latency.
 
-### The "Game"
-This is a very simple prototype for a tank game. At the moment it draws a single tank consisting
-of two sprites, one for the body and one for the gun barrel. The tank can be rotated using A and D keys
-and moved forward and backward using W and S respectively.
-The game can be run in two modes: Player and Observer.
-- Player can move the tank around using keyboard controls.
-- Observer can recieve UDP packets from Player and update the game from those packets.
+## 🛠 Features
+- **Custom UDP Protocol:** Low-latency communication using `sf::UdpSocket`.
+- **Server-Relay Architecture:** Centralized server to synchronize game state between clients.
+- **Entity Interpolation:** 100ms jitter buffer for smooth remote player movement.
+- **Local Authoritative Movement:** Instant responsiveness for the local player.
 
-### The protocol
-At the moment we are only sending the position of the tank to the observer, rotation, tank colour, etc. are not transmitted.
-The send rate of the packets can be adjusted using the send_rate variable in main.cpp
+## 🚀 How to Build and Run
+### Prerequisites
+- Visual Studio 2022
+- SFML 2.6 or 3.0 (ensure DLLs are in the output directory)
+
+### Running the Game
+1. **Start the Server:** Run the executable and select **Role 3**. (Default Port: 5000)
+2. **Start Client 1:** Run a second instance and select **Role 1**.
+3. **Start Client 2:** Run a third instance and select **Role 2**.
+
+## 📁 Project Structure
+- `main.cpp`: Entry point, handles the network loop and role selection.
+- `Game.cpp / .h`: Manages game logic, local/remote tank updates, and rendering.
+- `Tank.cpp / .h`: Contains the tank controller and **Interpolation logic**.
+- `tank_message.h`: Defines the `TankMessage` struct for network packets.
+
+## 🧪 Testing
+The system has been stress-tested using **Clumsy 0.2** to simulate:
+- Latency (100ms - 200ms)
+- Packet Loss (5% - 10%)
+
+## 📚 References
+- Gaffer on Games (UDP vs TCP)
+- Valve Developer Community (Multiplayer Networking)
