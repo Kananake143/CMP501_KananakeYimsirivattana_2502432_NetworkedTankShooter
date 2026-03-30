@@ -8,6 +8,19 @@ A real-time multiplayer tank game developed using **C++** and **SFML**. This pro
 - **Entity Interpolation:** 100ms jitter buffer for smooth remote player movement.
 - **Local Authoritative Movement:** Instant responsiveness for the local player.
 
+### Player 1 (Red Tank)
+- **W / S:** Move Forward / Backward
+- **A / D:** Rotate Tank Body (Left / Right)
+- **Mouse Movement:** Aim Tank Barrel
+- **Enter:** Fire Projectile
+
+### Player 2 (Green Tank)
+- **Arrow Keys (Up/Down):** Move Forward / Backward
+- **Arrow Keys (Left/Right):** Rotate Tank Body
+- **Mouse Movement:** Aim Tank Barrel
+- **Enter:** Fire Projectile
+*(Note: Controls are processed locally depending on the selected Role.)*
+
 ## 🚀 How to Build and Run
 ### Prerequisites
 - Visual Studio 2022
@@ -23,6 +36,12 @@ A real-time multiplayer tank game developed using **C++** and **SFML**. This pro
 - `Game.cpp / .h`: Manages game logic, local/remote tank updates, and rendering.
 - `Tank.cpp / .h`: Contains the tank controller and **Interpolation logic**.
 - `tank_message.h`: Defines the `TankMessage` struct for network packets.
+
+## 📁 Technical Features
+- **Custom UDP Protocol:** Low-latency communication via `sf::UdpSocket`.
+- **Server-Relay Architecture:** Centralized server for world state synchronization.
+- **Entity Interpolation:** 100ms jitter buffer for smooth remote movement.
+- **Local Authoritative Movement:** Instant responsiveness for the active player.
 
 ## 🧪 Testing
 The system has been stress-tested using **Clumsy 0.2** to simulate:
