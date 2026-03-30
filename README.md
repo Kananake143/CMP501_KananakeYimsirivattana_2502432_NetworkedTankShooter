@@ -12,7 +12,7 @@ A real-time multiplayer tank game developed using **C++** and **SFML**. This pro
 - **W / S:** Move Forward / Backward
 - **A / D:** Rotate Tank Body (Left / Right)
 - **Mouse Movement:** Aim Tank Barrel
-- **Enter:** Fire Projectile
+- **Spacebar:** Fire Projectile
 
 ### Player 2 (Green Tank)
 - **Arrow Keys (Up/Down):** Move Forward / Backward
